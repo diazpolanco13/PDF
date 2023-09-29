@@ -1,0 +1,843 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © apidevelopers
+
+//@version=5
+var v = "v 2.3"
+indicator_name = ' 🐸 RSI Bands [APIDEVs] 👑'
+indicator(title=indicator_name, shorttitle = '🐸 RSI Bands [APIDEVs] 👑', overlay=true, explicit_plot_zorder=true, max_labels_count=500, max_lines_count=500,max_bars_back=4999)
+
+// ⏬ [0] ===================  [INDICE]  ================== [OPEN] --{
+// 1- CONSTANTES
+// 2- FUNCIONES GLOBALES
+// 3- INTERNAL STRUCTURE
+// 4- FILTERS AND SIGNALS
+// 5- TOOLS AND TABLES
+// 6- PLOTS
+// 7- ALERTAS
+
+//⬅️}
+// ⏬ [1] =================  [CONSTANTES]  ================ [OPEN] --{
+
+//Color rsi palet
+var LIME    = color.rgb(5, 253, 133)
+var GREEN   = #26A69A
+var WHITE   = color.rgb(160, 28, 28)
+var RED     = #ff0008
+
+var gemo2 = '🟢'
+var remo2 = '🔴'
+var nemo2 = '🟠'
+
+src = close
+
+//⏫}
+// ⏬ [2] =============  [FUNCIONES GLOBALES]  ============ [OPEN] --{
+import apidevelopers/ApiLibrary/15 as api
+text_auto_Color = api.isDark() ? color.white : color.black 
+
+
+//⬅️}
+// ⏬ [3] =============  [INTERNAL STRUCTURE]  ============ [OPEN] --{
+// 🔻 "====================== MENU LOGICA ========================"  {
+panelgroup          = indicator_name + " " + v 
+i_candlecolori      = input.string('None', 'Candlestick Color' , group = panelgroup, inline='1', display = display.none, options = ['None', 'RSI', 'IA'], tooltip = "Colorear Velas por Indicadores (ADX, RSI y Medias Móviles): Al activar esta función, las velas del gráfico se colorearán de acuerdo a los valores de los indicadores ADX, RSI y las medias móviles. Esto proporciona una representación visual de las condiciones del mercado y puede ayudar a identificar tendencias y señales de trading de manera más eficiente.")
+i_showpanel         = input.bool(false, title='Panel'           , group = panelgroup, inline='2', display = display.none)
+i_labelsize_smart   = input.string('Tiny', ''                  , group = panelgroup, inline='2', display = display.none, options = ['Tiny', 'Small', 'Normal', 'Large', 'Huge'])
+i_smart_style       = input.string('Complet', ''               , group = panelgroup, inline='2', display = display.none, options = ['Smart', 'Medium', 'Complet'])
+i_tablepos_smart    = input.string('Bottom Right', ''          , group = panelgroup, inline='2', display = display.none, options = ['Top Left', 'Top Center', 'Top Right', 'Middle Left', 'Middle Center', 'Middle Right', 'Bottom Left', 'Bottom Center', 'Bottom Right'],  tooltip = "Panel Informativo del Indicador: Este panel proporciona un resumen completo del estado actual de todas las herramientas del indicador. Indica claramente si las condiciones son alcistas o bajistas, lo que facilita una visión rápida y efectiva de la situación del mercado y ayuda en la toma de decisiones de trading.")
+i_table_color_1     = input.color(#000000 , 'Panel color'    , group = panelgroup, inline='3', display = display.none)
+i_table_color_2     = input.color(#010120 , ''               , group = panelgroup, inline='3', display = display.none)
+i_table_color_3     = input.color(#FFFFFF , ''               , group = panelgroup, inline='3', display = display.none, tooltip = "Opciones de Color del Panel: Estas configuraciones te permiten personalizar el color del panel informativo del indicador. Ajusta los colores según tus preferencias para una experiencia de trading visualmente agradable y personalizada.")
+
+indicatorgroup      = "- Indicators & Tools -"
+i_plotbands         = input.bool(true, 'Show EMAs Band'        , group = indicatorgroup, inline='1', display = display.none, tooltip = "Activa o desactiva las Bandas de Medias Móviles: Muestra bandas que representan dos medias móviles de 10 y 55 períodos para identificar tendencias y puntos de entrada o salida. Una herramienta útil para el análisis de la tendencia en el gráfico." )
+i_plotbandsmtf      = input.bool(true, 'Show EMAs Band MTF'    , group = indicatorgroup, inline='2', display = display.none, tooltip = "Activa o desactiva una Media Móvil Multitemporal: Calcula una media móvil de 55 períodos basada en la temporalidad superior. Por ejemplo, si el gráfico es de 1 hora, mostrará una media móvil equivalente a la de 4 horas. Esto proporciona una visión más amplia de la tendencia, lo que puede ser útil para tomar decisiones de trading considerando múltiples marcos temporales." )
+i_plotrsi           = input.bool(true, 'Show RSI Overlay'      , group = indicatorgroup, inline='3', display = display.none, tooltip = "Activa o desactiva el RSI Overlay: Muestra el Relative Strength Index (RSI) junto al gráfico de precios para evaluar la fuerza de la tendencia. Útil para identificar condiciones de sobrecompra o sobreventa en el mercado." )
+i_plotatr           = input.bool(false,'Show ATR traling '     , group = indicatorgroup, inline='4', display = display.none, tooltip = 'Activa o desactiva un ATR trailing stop: Esta herramienta usa la volatilidad del mercado para fijar stops dinámicos. Ajusta automáticamente el stop-loss mientras la tendencia avanza, protegiendo contra pérdidas y optimizando las oportunidades de ganancias. ' )
+i_showtrade         = input.bool(false,'Show trade management' , group = indicatorgroup, inline='5', display = display.none, tooltip = "Gestor de Trades: Muestra líneas en el gráfico que representan niveles de stop, entrada y tres niveles de take profit basados en relaciones de riesgo-recompensa 1:1, 1:2 y 1:3. Facilita la gestión de posiciones al proporcionar una vista visual clara de los niveles de precio objetivo y riesgo asociados a cada operación." )
+
+signalgroup         = "- Signals & alerts -"
+i_cloudsignal       = input.bool(false, 'Signals RSI Cloud'          , group = signalgroup, inline='1', display = display.none, tooltip = 'Señal de RSI por Cruce de Media Móvil Simple (Cloud): Esta señal se activa cuando el RSI cruza la media móvil simple incorporada en su índice, que también se conoce como "cloud". Cuando el RSI cruza por encima de esta "cloud", se generan señales alcistas, y cuando cruza por debajo, se generan señales bajistas. La "cloud" proporciona una referencia visual adicional para confirmar cambios en la dirección del RSI y tomar decisiones de trading correspondientes.')
+i_rsisignal         = input.bool(false, 'Signals RSI Cross level 50' , group = signalgroup, inline='2', display = display.none, tooltip = 'Señal de RSI en Retroceso: Esta señal se activa cuando el RSI cruza la línea 50 del indicador en favor de la tendencia previa. Es común que el RSI toque el punto 50 y continúe en la dirección de la tendencia subyacente. Esta señal ayuda a identificar oportunidades de trading al aprovechar los retrocesos del RSI que respaldan la tendencia dominante del mercado.' )
+i_crossignal        = input.bool(false, 'Signals RSI cross Overbought and Oversold' , group = signalgroup, inline='3', display = display.none, tooltip = 'Señal sobrecompra y sobreventa del RSI: Activa señales alcistas cuando el RSI cruza desde abajo hacia arriba el nivel de sobreventa (por defecto, 30), y señales bajistas cuando cruza desde arriba hacia abajo el nivel de sobrecompra (por defecto, 70). ')
+i_signalosc2        = input.bool(false, 'Signals ADX Trend reversal'     , group = signalgroup, inline='4', tooltip = "Activar señales de reversion de tendencia: Al activar esta opción, se activaran señales cuando el oscillador detecte retroceso en el precio durante el desarrollo de una tendencia." )
+i_signalosc         = input.bool(false, 'Signals ADX Trend continuation' , group = signalgroup, inline='5', tooltip = "Activar señales de continuacion de tendencia: Al activar esta opción, se activaran señales cuando el oscillador detecte un nuevo impulso a favor de la tendencia, despues de habier ocurrido un retroceso " )
+i_diversignal       = input.bool(false, 'Signals Divergences'           , group = signalgroup, inline='6',display=display.none, tooltip = "Activar señales de Divergencias en el RSI: Al activar esta opción, se muestran señales de divergencia en el Relative Strength Index (RSI) con respecto al precio en el gráfico. Las divergencias entre el RSI y el precio pueden ser indicativos de posibles cambios en la tendencia y ofrecen oportunidades de trading significativas.")
+i_masignal          = input.bool(false, 'Signals EMAs'              , group = signalgroup, inline='7', display = display.none, tooltip = 'Activar señales de Cruce de Bandas de EMAs: Al activar esta función, se generan señales de trading cuando las bandas de las Medias Móviles Exponenciales (EMAs) se cruzan. Estos cruces son indicativos de cambios en la tendencia y pueden ayudar a identificar oportunidades de entrada y salida en el mercado.' )
+i_atrsignal         = input.bool(false, 'Signals ATR'               , group = signalgroup, inline='8', display = display.none, tooltip = 'Activar señales de Cruce de Precio sobre el ATR Trailing Stop: Al activar esta función, se generan señales cuando el precio cruza el ATR Trailing Stop. Esto indica posibles cambios de tendencia, ya que estos cruces suelen acompañar movimientos fuertes que rompen la estructura anterior.')
+
+filtergroup         = "- Filters -" 
+i_atrMaxSize        = input.float(title="Max Candle Size", defval=2.5, minval=0.0, step=0.1, group=filtergroup, inline = "1", tooltip="Tamaño Máximo de Vela para Señal (basado en ATR, por defecto 2.5): Define el tamaño máximo que una vela puede tener para que se active una señal, permitiéndote ajustar este umbral según tus preferencias. Por defecto, se establece en 2.5 veces el valor del ATR, lo que ayuda a filtrar señales poco ventajosas en mercados volátiles.", display=display.none)
+i_disableRepaint    = input.bool(true , "Signal Confirmed"     , group = filtergroup, inline = "0", display = display.none, tooltip = "Desactivar el repintado: Al activar esta opción, las señales solo se mostrarán una vez que las velas hayan cerrado, lo que evita la molestia de señales cambiantes durante el desarrollo de la vela.")
+
+
+
+i_filter_panel      = input.bool(true , ""                     , group = filtergroup, inline = "2", display = display.none,  tooltip = "Mostrar Panel de filtros. A pesar de estar activo. solo se mostrará el estado de los filtros activos")
+i_labelsize_filter  = input.string('Tiny','Filter Panel'       , group = filtergroup, inline = "2", display = display.none, options = ['Tiny','Small','Normal','Large','Huge'])
+i_tablepos_filter   = input.string('Bottom Left',""            , group = filtergroup, inline = '2', display = display.none, options = ['Bottom Left', 'Top Left', 'Middle Left', 'Bottom Center', 'Top Center'] ,  tooltip = "Panel de Filtros Activos: Este panel proporciona una representación visual clara de los filtros actualmente activos en el indicador. Cada filtro activado se muestra de manera destacada, lo que facilita la identificación rápida de las condiciones y criterios que afectan las señales de trading.")
+
+i_rsifilteri        = input.bool(false, 'Filter RSI Cloud'      , group=filtergroup, inline='3', display= display.none, tooltip = "Filtra las señales del RSI en funcion a estado del RSI Multitemporal del indicador")
+i_rsifilteri2       = input.bool(false, 'Filter RSI Cloud MTF'  , group=filtergroup, inline='4', display= display.none, tooltip = "Filtra las señales del RSI en funcion a estado del RSI Multitemporal del indicador")
+i_emafilteri        = input.bool(false, 'Filter EMA'            , group=filtergroup, inline='5', display= display.none, tooltip = "Filtra las señales del RSI en funcion a los cruces de las EMAs configuadas en el indicador, por lo general seran las EMAs de 10 y 55 periodos")
+i_emafilteri2       = input.bool(false, 'Filter EMA MTF'        , group=filtergroup, inline='6', display= display.none, tooltip = "Filtra las señales del RSI en funcion a la EMA Multitemporal del indicador, por lo general sera la EMAs 55 periodos de la temporalidad superior al grafico.")
+i_atrfilteri        = input.bool(false, 'Filter ATR'            , group=filtergroup, inline='7', display= display.none, tooltip = "Filtra las señales del RSI en funcion a los cruces del indicador ATR de 7 periodos")
+
+
+//🔺}
+// 🔻 "======================== EMAS  ============================"  {  
+emagroup = '- MA\'S -'
+
+ma1i        = input.int(10, 'Band MA\'s', group=emagroup, inline='1')
+ma2i        = input.int(55, '-'         , group=emagroup, inline='1')
+Typex       = input.string(defval='EMA', title='', options=['SMA', 'EMA', 'RMA', 'WMA', 'VWMA', 'Linear'], group=emagroup, inline='1', tooltip = "Seleccione los periodos de las medias moviles que componen las bandas del indicador  " )
+
+bull_color  = input.color(color.lime, 'Bands MA\'s color', group=emagroup, inline='bc')
+bear_color  = input.color(color.red, '' , group=emagroup, inline='bc' )
+transp      = input.int(100, '', minval=0, maxval=100, inline='bc', group=emagroup, tooltip = "Seleccione el color y la transparencia de las bandas" )
+
+ma3i        = input.int(55, 'Bands MTF', inline='2', group=emagroup)
+mabacki     = input.bool(true, 'Background', inline='2', group=emagroup, tooltip = "Seleccione los periodos de la Media Movil multitemporal del indicadorn\Tambien puede activar o desactivar el background de fondo" )
+
+minutos = api.f_resInMinutes()
+
+multiplier = minutos >= 43800 ? 3 : minutos >= 10080 ? 4 : minutos >= 1440 ? 7 : minutos >= 240 ? 6 : minutos >= 60 ? 4 : minutos >= 15 ? 4 : minutos >= 5 ? 5 : 4
+
+
+diff_ma  = math.abs(ma2i - ma1i) / 9
+length1  = math.round(ma1i + diff_ma * 0)
+length2  = math.round(ma1i + diff_ma * 1)
+length3  = math.round(ma1i + diff_ma * 2)
+length4  = math.round(ma1i + diff_ma * 3)
+length5  = math.round(ma1i + diff_ma * 4)
+length6  = math.round(ma1i + diff_ma * 5)
+length7  = math.round(ma1i + diff_ma * 6)
+length8  = math.round(ma1i + diff_ma * 7)
+length9  = math.round(ma1i + diff_ma * 8)
+length10 = math.round(ma1i + diff_ma * 9)
+
+
+// BANDAS DE MEDIAS
+MA1  = api.getMA(length1  , Typex)
+MA2  = api.getMA(length2  , Typex)
+MA3  = api.getMA(length3  , Typex)
+MA4  = api.getMA(length4  , Typex)
+MA5  = api.getMA(length5  , Typex)
+MA6  = api.getMA(length6  , Typex)
+MA7  = api.getMA(length7  , Typex)
+MA8  = api.getMA(length8  , Typex)
+MA9  = api.getMA(length9  , Typex)
+MA10 = api.getMA(length10 , Typex)
+
+// EMAs temporales y MTF
+ma1    = api.getMA(ma1i, Typex )
+ma2    = api.getMA(ma2i, Typex)
+ma3    = api.getMA(ma3i * multiplier, Typex)
+
+
+type EMA_bands
+    float src
+    float emaValue
+
+// Direccion de las EMAS. 1 cuando las medias son alcistas -1 cuando las medias son bajistas
+fmadir(ma1, ma2) =>
+    dir = 0
+    dir := ma1 > ma2 ? 1 : ma1 < ma2 ? -1 : nz(dir[1])
+    dir
+
+// // con la suma de la direccion de cada EMA se suma o restan para sacar un valor que va de 10 a -10
+// total_dir = fmadir(close, MA1) + fmadir(MA1, MA2) + fmadir(MA2, MA3) + fmadir(MA3, MA4) + fmadir(MA4, MA5) + fmadir(MA5, MA6) + fmadir(MA6, MA7) + fmadir(MA7, MA8) + fmadir(MA8, MA9) + fmadir(MA9, MA10)
+
+// // Esta funcion devolvera un color gradiente entre verde y rojo en funcion al calculo de la direccion
+// color_grad = color.from_gradient(total_dir, -10, 10, bear_color, bull_color)
+
+// funcion que convierte un color exadecimar en RGB
+f_grad_transp(_c_col, _transp) =>
+    _c_red   = color.r(_c_col)
+    _c_green = color.g(_c_col)
+    _c_blue  = color.b(_c_col)
+    color.rgb(_c_red, _c_green, _c_blue, _transp)
+
+// Devuelve un color ROJO o VERDE en formato RGB en funcion a la direccion del mercado
+flinecolor(ma1, ma2, transpx) =>
+    color_x = color(na)
+    color_x := ma1 > ma2 ? f_grad_transp(bull_color, transpx) : ma1 < ma2 ? f_grad_transp(bear_color, transpx) : nz(color_x[1])
+    color_x
+
+// Devuelve un color AZUL O MARRON en formato RGB en funcion a la direccion del mercado
+flinecolor2(ma1, ma2, transpx) =>
+    color_x = color(na)
+    color_x := ma1 > ma2 ? f_grad_transp(color.blue, transpx) : ma1 < ma2 ? f_grad_transp(color.maroon, transpx) : nz(color_x[1])
+    color_x
+
+// señales de Long y Short en funcion al cruce de las EMAS
+ma_buy = ta.crossover(MA1, MA10)  
+ma_sel = ta.crossunder(MA1, MA10) 
+
+// 🔺 }
+// 🔻 "========================= ATR  ============================"  { 
+atrgroup        = '- ATR -'
+i_ATRPeriod     = input.int(7, 'ATR' , inline='ATR', group=atrgroup, display= display.none)
+i_ATRMultip     = input.float(3.0, '', inline='ATR', group=atrgroup, display= display.none, tooltip = "ATR Trailing Stop (Período / Multiplicador):\n\nPeríodo del ATR (7): Define la cantidad de períodos para calcular el ATR. Más períodos suavizan la volatilidad.\n\nMultiplicador del ATR (3): Ajusta el valor multiplicador para el algoritmo del ATR Trailing Stop, afectando la distancia entre el precio y el stop.")
+
+[atr, atrTraling, atrUp, atrDn, c_atr ] = api.f_atr(i_ATRPeriod, i_ATRMultip)
+
+atr_d = 0
+atr_d := atrUp ? 1 : atrDn ? -1 : nz(atr_d[1])
+arrow_atr = (atr_d==1?' ↗':' ↘')  
+
+// señales de Long y Short en funcion al cruce del ATR
+atr_buy = atrUp and atrUp != atrUp[1]
+atr_sel = atrDn and atrDn != atrDn[1] 
+
+
+
+// 🔺 }
+// 🔻 "==================== ADX OSCILLATOR ======================="  {  
+adxgroup         = '-- ADX OSCILLATOR --'
+i_oscPeriod      = input.int(defval = 14   ,title = "ADX Oscillator Length" ,group= adxgroup, inline = "1", tooltip='Períodos del ADX Oscillator: Controla la cantidad de períodos utilizados en el cálculo del ADX Oscillator. Menos períodos hacen que el indicador sea más sensible a los movimientos de precio. Por defecto, se utilizan 14 períodos. ' )
+
+[osc, oscUp, oscDn, base, c_osc] = api.f_adxOsc(open, high, low, close, i_oscPeriod)
+
+// SIGNAL DE CONT
+//------------------------------------------------------------
+osc_up = osc > osc[1] and osc > base 
+osc_dn = osc < osc[1] and osc < base 
+
+osc_buy = osc_up and not osc_up[1]
+osc_sel = osc_dn and not osc_dn[1]
+
+// SIGNAL DE REVERSION
+//------------------------------------------------------------
+osc_up2 = osc > osc[1] and osc < base 
+osc_dn2 = osc < osc[1] and osc > base 
+
+osc_buy2 = osc_up2 and not osc_up2[1]
+osc_sel2 = osc_dn2 and not osc_dn2[1]
+
+// 🔺 }
+// 🔻 "================== ADX OSCILLATOR MTF ====================="  {  
+mult_adxmtf = minutos >=  43800? '3M' :  minutos >=  10080? '4W' :  minutos >=  1440 ? '1W' :  minutos >=  240  ? '1D' :  minutos >=  60   ? '240':  minutos >=  15   ? '60' :  minutos >=  5    ? '25' :  minutos >=  4    ? '16' :  minutos >=  3    ? '12' :  minutos >=  2    ? '8'  :  minutos >=  1    ? '4'  :'1'
+
+adx_mtf(_timeframe)=>
+    select   = timeframe.in_seconds(timeframe.period) == timeframe.in_seconds(_timeframe)
+    
+    [osc2, oscUp2, oscDn2, base2, c_osc2]  = request.security(syminfo.tickerid, _timeframe, [osc, oscUp, oscDn, base, c_osc], barmerge.gaps_off, barmerge.lookahead_on)
+
+    if select
+        [osc, oscUp, oscDn, base, c_osc]
+    else
+        [osc2, oscUp2, oscDn2, base2, c_osc2]
+
+[osc2, oscUp2, oscDn2, base2, c_osc2] = adx_mtf(mult_adxmtf)
+
+
+// 🔺 }
+// 🔻 "========================= RSI ============================="  { 
+rsigroup = '- RSI -'
+int i_lengthrsi         = input.int(14, 'RSI Period', group=rsigroup, inline='1', tooltip = "Períodos del RSI: Controla la cantidad de períodos utilizados en el cálculo del Relative Strength Index (RSI). Por defecto, son 14 períodos. Ajustarlos afecta la sensibilidad del RSI a los cambios en la fuerza del mercado. Menos períodos lo hacen más reactivo, más períodos lo suavizan.")
+int i_obLevel           = input.int(70, 'Overbought', group=rsigroup, inline='2', tooltip = "Nivel de Sobrecompra del RSI: Define el umbral (por defecto: 70) que indica sobrecompra cuando el RSI lo supera.")
+int i_osLevel           = input.int(30, 'Oversold'  , group=rsigroup, inline='3', tooltip = "Nivel de Sobreventa del RSI: Define el umbral (por defecto: 30) que indica sobreventa cuando el RSI cae por debajo.")
+
+
+//----------------------------------------
+// BIBUJANDO NIVELES DE SOBRECOBRA Y SOBREVENTA DEL RSI
+rsioverlay(src, length, i_obLevel, i_osLevel) =>
+    ep = 2 * length - 1
+    auc = ta.ema(math.max(src - src[1], 0), ep)
+    adc = ta.ema(math.max(src[1] - src, 0), ep)
+    x1 = (length - 1) * (adc * i_obLevel / (100 - i_obLevel) - auc)
+    ub = x1 >= 0 ? src + x1 : src + x1 * (100 - i_obLevel) / i_obLevel
+    x2 = (length - 1) * (adc * i_osLevel / (100 - i_osLevel) - auc)
+    lb = x2 >= 0 ? src + x2 : src + x2 * (100 - i_osLevel) / i_osLevel
+    [ub, lb]
+[ub, lb] = rsioverlay(src, i_lengthrsi, i_obLevel, i_osLevel)
+
+
+// CALCULANDO EL PUNTO 50 DEL RSI
+avg_1 = math.avg(ub, lb)
+
+// CALCULANDO EL RSI
+rsi     = ta.rsi(src, i_lengthrsi)
+rsima   = ta.ema(rsi, i_lengthrsi)
+rsilead = ta.ema(ta.rsi(close, math.round(i_lengthrsi / 2)), 3)
+
+var rsi_d = 0
+rsi_d := rsi>rsima?1:rsi<rsima?-1:rsi_d[1]
+arrow_rsi = str.tostring(rsi, '#') + (rsi > rsima ? ' ↗' : ' ↘')
+
+// COLOR DEL RSI 
+rsicolor = rsi < i_osLevel ? RED :rsi > i_obLevel ? LIME : rsi > 50 ? GREEN : rsi < 50 ? WHITE : color(na)
+
+// DIBUJANDO EL RSI OVERLAY
+var label1 = label(na)
+var label2 = label(na)
+var label3 = label(na)
+
+var line1  = line(na)
+var line2  = line(na)
+var line3  = line(na)
+
+//CALCULAR TICK
+f_roundToTick(_price) =>
+    str.tostring(math.round(_price / syminfo.mintick) * syminfo.mintick)
+
+if not i_showtrade and i_plotrsi
+    //NIVEL DE SOBRE COMPRA
+    label.delete(label1[0])
+    line.delete(line1[0])
+    label1 := label.new(x=bar_index + 20, y=ub, text='RSI ' + ' (' + str.tostring(i_obLevel, '#') + ')' + ' = ' + str.tostring(f_roundToTick(ub)), xloc=xloc.bar_index, yloc=yloc.price, color=#00000000, style=label.style_label_left, textcolor=color.green, size=size.normal)
+    line1 := line.new(bar_index + 3, ub, bar_index + 20, ub, color=color.green, xloc=xloc.bar_index, style=line.style_solid)
+    //NIVEL DE SOBRE VENTA
+    label.delete(label2[0])
+    line.delete(line2[0])
+    label2 := label.new(x=bar_index + 20, y=lb, text='RSI ' + ' (' + str.tostring(i_osLevel, '#') + ')' + ' = ' + str.tostring(f_roundToTick(lb)), xloc=xloc.bar_index, yloc=yloc.price, color=#00000000, style=label.style_label_left, textcolor=color.red, size=size.normal)
+    line2 := line.new(bar_index + 3, lb, bar_index + 20, lb, color=color.red, xloc=xloc.bar_index, style=line.style_solid)
+    //PUNTO 50
+    label.delete(label3[0])
+    line.delete(line3[0])
+    label3 := label.new(x=bar_index + 20, y=avg_1, text='RSI ' + ' (50)' + ' = ' + str.tostring(f_roundToTick(avg_1)), xloc=xloc.bar_index, yloc=yloc.price, color=#00000000, style=label.style_label_left, textcolor=color.blue, size=size.normal)
+    line3 := line.new(bar_index + 3, avg_1, bar_index + 20, avg_1, color=color.blue, xloc=xloc.bar_index, style=line.style_solid)
+    
+// DIBUJANDO EL RSI
+var label4  = label(na)
+var line4   = line(na)
+
+if not i_showtrade and i_plotrsi
+    label.delete(label4[0])
+    line.delete(line4[0])
+    label4 := label.new(x=bar_index + 10, y=src, text='RSI ' + ' = ' + str.tostring(rsi, '#.#'), xloc=xloc.bar_index, yloc=yloc.price, color=#00000000, style=label.style_label_left, textcolor=rsicolor, size=size.normal)
+    line4 := line.new(bar_index + 3, src, bar_index + 10, src, color=rsicolor, xloc=xloc.bar_index, style=line.style_dotted)
+    line4
+
+
+
+
+// SEÑALES DE LONG Y SHORT
+//----------------------------------------
+cloud_up = rsilead > rsima
+cloud_dn = rsilead < rsima
+
+// SEÑALES DE LONG Y SHORT
+//----------------------------------------
+rsi_buy = ta.crossover(rsi, 50) 
+rsi_sel = ta.crossunder(rsi, 50) 
+
+// SIGNAL CRUCE DE BADAS DEL RSI
+cloud_buy = ta.crossover (rsilead, rsima) and rsi < 70
+cloud_sel = ta.crossunder(rsilead, rsima) and rsi > 35
+
+// SIGNAL CRUCE DE SOBRE COMPRA Y COBRE VENTA
+oversold_buy = ta.crossover(rsi, i_osLevel ) 
+overbought_sel = ta.crossunder (rsi, i_obLevel ) 
+
+// 🔺 } 
+// 🔻 "======================= RSI MTF ==========================="  {
+
+mult_timeframes = minutos >=  43800 ? '3M' : minutos >=  10080? '4W' : minutos >=  1440 ? '1W' : minutos >=  240  ? '1D' : minutos >=  60   ? '240': minutos >=  15   ? '60' : minutos >=  5    ? '25' : minutos >=  4    ? '16' : minutos >=  3    ? '12' : minutos >=  2    ? '8'  : minutos >=  1    ? '4'  :'1'
+
+rsi_mtf(_src, _period, _timeframe)=>
+    select   = timeframe.in_seconds(timeframe.period) == timeframe.in_seconds(_timeframe)
+    [rsi2,rsima2,rsilead2]  = request.security(syminfo.tickerid, _timeframe, [ rsi[1], rsima[1], rsilead[1] ], barmerge.gaps_off, barmerge.lookahead_on)
+    if select
+        [rsi,rsima,rsilead]
+    else
+        [rsi2,rsima2,rsilead2]
+
+[rsi2,rsima2,rsilead2] = rsi_mtf(src, i_lengthrsi, mult_timeframes)
+
+
+cloud_up2 = rsilead2 > rsima2
+cloud_dn2 = rsilead2 < rsima2
+
+c_cloud2 = cloud_up2 ? color.new(color.green, api.isDark() ? 75 : 40) : color.new(color.red, api.isDark() ? 75 : 40)
+//} 
+//⏫}
+// ⏬ [4] ============  [FILTERS AND SIGNALS]   =========== [OPEN] --{
+// Check our ATR Max Size condition to make sure candle isn't unreasonably large 
+atrMaxSizeCheck      = api.atrFilter(maxSize = i_atrMaxSize)
+
+// Check our conditions/filters
+generalConditionsMet = atrMaxSizeCheck and not na(atr) and not na(ma1) and not na(ma2) and not na(ma3) and (barstate.isconfirmed or not i_disableRepaint)
+
+// Check long-specific conditions
+longConditionsMet    = (i_rsifilteri ? cloud_up : true) and (i_atrfilteri ? atr == 1 : true) and (i_emafilteri2 ? ma2 > ma3 : true) and (i_emafilteri ? ma1 > ma2 : true) and (i_rsifilteri2 ? rsi > rsi2 : true) 
+
+// Check short-specific conditions
+shortConditionsMet   = (i_rsifilteri ? cloud_dn : true) and (i_atrfilteri ? atr == -1 : true) and (i_emafilteri2 ? ma2 < ma3 : true) and (i_emafilteri ? ma1 < ma2 : true) and (i_rsifilteri2 ? rsi < rsi2 : true) 
+
+// Check signal actives conditions
+buy_signals          = (i_cloudsignal ? cloud_buy : false) or (i_rsisignal ? rsi_buy : false) or (i_signalosc ? osc_buy : false) or (i_signalosc2 ? osc_buy2 : false) or (i_masignal ? ma_buy : false) or (i_atrsignal ? atr_buy : false) or (i_crossignal ? oversold_buy : false) 
+sel_signals          = (i_cloudsignal ? cloud_sel : false) or (i_rsisignal ? rsi_sel : false) or (i_signalosc ? osc_sel : false) or (i_signalosc2 ? osc_sel2 : false) or (i_masignal ? ma_sel : false) or (i_atrsignal ? atr_sel : false) or (i_crossignal ? overbought_sel : false) 
+
+// Signals confirm
+buyT = buy_signals and generalConditionsMet and longConditionsMet
+selT = sel_signals and generalConditionsMet and shortConditionsMet
+
+// Signals state
+statesignal = 0
+statesignal := buyT ? 1 : selT ? -1 : nz(statesignal[1])
+signalT = buyT or selT
+
+//⏫}
+// ⏬ [5] ===================  [PLOTS]   ================== [OPEN] --{   
+// 🔻 "=================== [PLOT CANDELS] ========================"  {
+
+// Compara dos valores y asigna 1 cuando el primero esta por encima del segundo y -1 cuando el segundo esta por envima del primero
+indicator_power(_opt1, _opt2) =>
+    dir = 0
+    dir := _opt1 > _opt2 ? 1 : _opt1 < _opt2 ? -1 : nz(dir[1])
+    dir
+
+// Se comparan las variables del indicador para sacar un valor que va de 10 a -10
+total_dir = indicator_power(close, ma1) + indicator_power(ma1, ma2) + indicator_power(ma2, ma3) + indicator_power(rsilead, rsima) + indicator_power(rsilead2, rsima2) + indicator_power(rsi, i_obLevel) + indicator_power(rsi2, i_obLevel) + indicator_power(rsilead, rsilead2) + indicator_power(rsilead, rsima2) + indicator_power(rsi, 50)
+
+// Esta funcion devolvera un color gradiente entre verde y rojo en funcion al calculo de la direccion
+color_grad = color.from_gradient(total_dir, -10, 10, color.new(#d32929, 0), color.new(#30d335, 0))
+
+// Soloreador simple, basado en el cruce de las bandas del RSI
+rsi_color_candle = rsi > rsima ? color.green : color.red
+
+barcolor(i_candlecolori == 'RSI' ? rsi_color_candle : i_candlecolori == "IA" ? color_grad : na, title='Candlestick Color')
+
+percentage_from_total_dir(_total_dir) =>
+    percentage = (_total_dir / 10) * 100
+    percentage
+
+//log.info(str.tostring(percentage_from_total_dir(total_dir) ) + " %")
+// 🔺 }
+// 🔻 "===================== [PLOT ATR] =========================="  {
+patr1 = plot(i_plotatr ? atrTraling : na, color=color.new(c_atr, 80), title='ATR Stop', linewidth=2, editable=false)
+patr2 = plot(ohlc4, color=na, editable=false, display=display.none)
+fill(patr1, patr2 , color=color.new(c_atr, 90), editable=false)
+// 🔺 }
+// 🔻 "===================== [PLOT EMAS] ========================="  {
+pmaMTF = plot(i_plotbandsmtf ? ma3 : na, 'MA 2', ma2 >= ma3 ? color.new(color.lime, 60) : color.new(color.red, 60), linewidth=4)
+
+pm1 = plot(i_plotbands  ? MA1  : na, 'Band', color=flinecolor2(close, MA1, 0), display=display.all , editable=false, linewidth= 2, show_last=3000)
+pm2 = plot(i_plotbands  ? MA2  : na, 'MA 2', color=flinecolor(MA1, MA2, 0)   , display=display.none, editable=false, linewidth=-1, show_last=100)
+pm3 = plot(i_plotbands  ? MA3  : na, 'MA 3', color=flinecolor(MA2, MA3, 0)   , display=display.none, editable=false, linewidth=-1, show_last=100)
+pm4 = plot(i_plotbands  ? MA4  : na, 'MA 4', color=flinecolor(MA3, MA4, 0)   , display=display.none, editable=false, linewidth=-1, show_last=100)
+pm5 = plot(i_plotbands  ? MA5  : na, 'MA 5', color=flinecolor(MA4, MA5, 0)   , display=display.none, editable=false, linewidth=-1, show_last=100)
+pm6 = plot(i_plotbands  ? MA6  : na, 'MA 6', color=flinecolor(MA5, MA6, 0)   , display=display.none, editable=false, linewidth=-1, show_last=100)
+pm7 = plot(i_plotbands  ? MA7  : na, 'MA 7', color=flinecolor(MA6, MA7, 0)   , display=display.none, editable=false, linewidth=-1, show_last=100)
+pm8 = plot(i_plotbands  ? MA8  : na, 'MA 8', color=flinecolor(MA7, MA8, 0)   , display=display.none, editable=false, linewidth=-1, show_last=100)
+pm9 = plot(i_plotbands  ? MA9  : na, 'MA 9', color=flinecolor(MA8, MA9, 0)   , display=display.none, editable=false, linewidth=-1, show_last=100)
+pm10 = plot(i_plotbands ? MA10 : na, 'Band', color=flinecolor(MA1, MA10, 0)  , display=display.all , editable=false, linewidth= 1, show_last=3000, style=plot.style_circles)
+
+fill(pm1, pm2 , color= color.new(flinecolor(MA1, MA2 , transp ), transp - 45)) 
+fill(pm2, pm3 , color= color.new(flinecolor(MA2, MA3 , transp ), transp - 40)) 
+fill(pm3, pm4 , color= color.new(flinecolor(MA3, MA4 , transp ), transp - 35)) 
+fill(pm4, pm5 , color= color.new(flinecolor(MA4, MA5 , transp ), transp - 30)) 
+fill(pm5, pm6 , color= color.new(flinecolor(MA5, MA6 , transp ), transp - 25)) 
+fill(pm6, pm7 , color= color.new(flinecolor(MA6, MA7 , transp ), transp - 20)) 
+fill(pm7, pm8 , color= color.new(flinecolor(MA7, MA8 , transp ), transp - 15)) 
+fill(pm8, pm9 , color= color.new(flinecolor(MA8, MA9 , transp ), transp - 10)) 
+fill(pm9, pm10, color= color.new(flinecolor(MA9, MA10, transp ), transp - 5 )) 
+
+fill(pmaMTF, pm10, color = mabacki ? MA10 > ma3 ? color.new(bull_color, 90) : MA10 < ma3 ? color.new(bear_color, 90) : na : na)
+
+// 🔺 }
+// 🔻 "==================== [PLOT SIGNALS] ======================="  {
+//plots atr signal
+plotshape(i_atrsignal and i_plotatr and atr_buy ? atrTraling : na, title='ATR Bull', style=shape.labelup  , location=location.absolute, color=color.new(color.green,  api.isDark() ? 70 : 30) , size=size.tiny, text='Bull', textcolor=color.new(color.white, 0), editable=false, show_last=1000)
+plotshape(i_atrsignal and i_plotatr and atr_sel ? atrTraling : na, title='ATR Bear', style=shape.labeldown, location=location.absolute, color=color.new(color.red,  api.isDark() ? 70 : 30)    , size=size.tiny, text='Bear', textcolor=color.new(color.white, 0), editable=false, show_last=1000)
+
+//plots de all signal
+plotshape(buyT ? low  : na, title='Signal Long ', style=shape.labelup  , location=location.belowbar, color=color.new(color.green, api.isDark() ? 70 : 30), text='B', textcolor=color.new(color.white, 0), offset=0, editable=false, show_last=2000)
+plotshape(selT ? high : na, title='Signal Short', style=shape.labeldown, location=location.abovebar, color=color.new(color.red, api.isDark() ? 70 : 30)  , text='S', textcolor=color.new(color.white, 0), offset=0, editable=false, show_last=2000)
+
+
+// 🔺 }
+// 🔻 "================== [TOOLTIPS SIGNAL] ======================"  {
+long_tooltip =
+     i_rsisignal and rsi_buy == true ? "RSI Cross Level 50 🟢\nSeñal de RSI en Retroceso al nivel 50: Esta señal se activa cuando el RSI cruza hacia arriba la línea 50 del indicador en favor de la tendencia previa. Esta señal ayuda a identificar oportunidades de trading al aprovechar los retrocesos del RSI que respaldan la tendencia dominante del mercado." : 
+     i_signalosc and osc_buy == true ? "ADX Oscillator - Cont Trend 🟢\nEsta señal se activa cuando tras un retroceso bajista, se detecta un nuevo impulso a favor de la tendencia previa"  : 
+     i_signalosc2 and osc_buy2 == true ? "ADX Oscillator - reverse trend 🟢\nEstas señales se generan cuando se detecta un impulsos alcistas en el (ADX Oscillator). Estos impulsos indican oportunidades de trading en función de posibles cambios más sutiles en la dirección predominante del mercado según el ADX."  : 
+     i_cloudsignal and cloud_buy == true ? "Cross RSI Cloud 🟢\nSeñal de RSI por Cruce de Media Móvil Simple (Cloud): Esta señal se activa cuando el RSI cruza hacia arriba la media móvil simple incorporada en su índice, que también se conoce como cloud."  : 
+     i_masignal and  ma_buy  == true ? "Cross MAs 🟢 \nEstas señales se generan cuando las bandas de las Medias Móviles Exponenciales (EMAs) se cruzan al alza, es decir la media movil rapida (10 periodos), cruza hacia arriba la media movil lenta (55 periodos). Estos cruces son indicativos de cambios en la tendencia y pueden ayudar a identificar oportunidades de entrada y salida en el mercado." : 
+     i_crossignal and oversold_buy  == true ? "RSI crosses Oversold Level 🟢\nEstas señales se generan cuando el RSI cruza desde abajo hacia arriba el nivel de sobreventa (por defecto, 30) " : 
+     i_atrsignal and atr_buy == true ? "Cross ATR 🟢\nEstas señales se generan cuando el precio cruza al alza el ATR Trailing Stop, esto indica posibles cambios de tendencia, ya que estos cruces suelen acompañar movimientos fuertes que rompen la estructura bajista."  : na
+
+short_tooltip =
+     i_rsisignal and rsi_sel == true ? "RSI Cross Level 50 🔴\nSeñal de RSI en Retroceso al nivel 50: Esta señal se activa cuando el RSI cruza hacia abajo la línea 50 del indicador en favor de la tendencia previa. Esta señal ayuda a identificar oportunidades de trading al aprovechar los retrocesos del RSI que respaldan la tendencia dominante del mercado." : 
+     i_signalosc and osc_sel == true ? "ADX Oscillator - Cont Trend 🔴\nEsta señal se activa cuando tras un retroceso alcista, se detecta un nuevo impulso a favor de la tendencia previa"  : 
+     i_signalosc2 and osc_sel2 == true ? "ADX Oscillator - reverse trend🔴\nEstas señales se generan cuando se detecta un impulsos bajista en el (ADX Oscillator). Estos impulsos indican oportunidades de trading en función de cambios más sutiles en la dirección predominante del mercado según el ADX."  : 
+     i_cloudsignal and cloud_sel == true ? "Cross RSI Cloud 🔴\nSeñal de RSI por Cruce de Media Móvil Simple (Cloud): Esta señal se activa cuando el RSI cruza hacia abajo la media móvil simple incorporada en su índice, que también se conoce como cloud."  : 
+     i_masignal and ma_sel  == true ? "Cross MAs 🔴\nEstas señales se generan cuando las bandas de las Medias Móviles Exponenciales (EMAs) se cruzan a la baja, es decir la media movil rapida (10 periodos), cruza hacia abajo la media movil lenta (55 periodos). Estos cruces son indicativos de cambios en la tendencia y pueden ayudar a identificar oportunidades de entrada y salida en el mercado." : 
+     i_crossignal and overbought_sel  == true ? "RSI crosses Overbought level 🔴 \nEstas señales se generan cuando el RSI cruza desde arriba hacia abajo el nivel de sobrecompra (por defecto, 70). " : 
+     i_atrsignal and atr_sel == true ? "Cross ATR 🔴\nEstas señales se generan cuando el precio cruza a la baja el ATR Trailing Stop, esto indica posibles cambios de tendencia, ya que estos cruces suelen acompañar movimientos fuertes que rompen la estructura alcista."  : na
+
+// Draw Long Stop Loss & Take-Profit Price
+longStopLabel  = buyT ? label.new(bar_index, low  ,  tooltip = long_tooltip  , textalign = text.align_center,  color=color.new(color.green, 100), textcolor=color.white, style=label.style_label_up, size=size.large) : na
+
+// Draw Short Stop Loss & Take-Profit Price
+shortStopLabel = selT ? label.new(bar_index, high ,  tooltip = short_tooltip , textalign = text.align_center, color=color.new(color.red, 100), textcolor=color.white, style=label.style_label_down, size=size.large) : na
+
+// 🔺 }
+// ⏫ [CLOSE]}
+// ⏬ [6] ==============  [TOOLS AND TABLES]  ============= [OPEN] --{
+// 🔻 "===================== [SMART PANEL] ======================="  { 
+
+// INFORMACION DE LAS EMAS
+emad = 0
+emad := ma1 > ma2  ? 1 : ma1 < ma2 ? -1 : nz(emad[1])
+ema_text = (emad == 1 ? str.tostring(ma1i) + ' > ' + str.tostring(ma2i) + ' ' : str.tostring(ma1i) + ' < ' + str.tostring(ma2i) + ' ') + (emad == 1 ? '↗' : '↘')
+ema_proyect = emad == 1 ? gemo2 + ' Long' : remo2 + ' Short'
+ema_score = emad == 1 ? 20 : -20
+
+// INFORMACION DE LAS EMAS MTF
+emad2 = 0
+emad2 := ma2 > ma3  ? 1 : ma2 < ma3 ? -1 : nz(emad2[1])
+ema_text2 = (emad2 == 1 ? str.tostring(ma2i) + ' > ' + str.tostring(ma2i) + "MTF" + ' ' : str.tostring(ma1i) + ' < ' + str.tostring(ma2i) + ' ') + (emad2 == 1 ? '↗' : '↘')
+ema_proyect2 = emad2 == 1 ? gemo2 + ' Long' : remo2 + ' Short'
+ema_score2 = emad2 == 1 ? 20 : -20
+
+// INFORMACION DEL RSI 
+rsid = 0
+rsid := rsilead > rsima ? 1 : -1
+rsi_text    = (rsid == 1 ? 'Cloud up ' : 'Cloud Dw ') + (ta.rsi(close, i_lengthrsi) > 50 ? ' > 50' : ' < 50')
+rsi_proyect = rsid == 1 and rsi > 50 ? gemo2 + ' Long' : rsid == -1 and rsi < 50 ? remo2 + ' Short' : nemo2 + ' Rank'
+rsi_score   = rsid == 1 and rsi > 50 ? 20 : rsid == -1 and rsi < 50 ? -20 : 0
+
+// INFORMACION DEL RSI MTF
+rsid2 = 0
+rsid2 := rsilead2 > rsima2 ? 1 : -1
+rsi_text2    = (rsid2 == 1 ? 'Cloud up ' : 'Cloud Dw ') + (ta.rsi(close, i_lengthrsi) > 50 ? ' > 50' : ' < 50')
+rsi_proyect2 = rsid2 == 1 and rsi2 > 50 ? gemo2 + ' Long' : rsid2 == -1 and rsi < 50 ? remo2 + ' Short' : nemo2 + ' Rank'
+rsi_score2   = rsid2 == 1 and rsi2 > 50 ? 20 : rsid2 == -1 and rsi < 50 ? -20 : 0
+
+
+// INFORMACION DEL ATR PARA EL PANEL
+atrd = 0
+atrd := atr_d == 1 ? 1 : -1
+atr_proyect = atr_d == 1 ? gemo2 + ' Long' : remo2 + ' Short'
+atr_text    = atr_d == 1 ? 'Up' : 'Down'
+atr_score   = atr_d == 1 ? 20 : -20
+
+// INFORMACION DEL ADX OSCILLATOR PARA EL PANEL
+osc_d = 0
+osc_d  := oscUp ? 1 : oscDn ? -1 : nz(osc_d[1])
+arrow_osc   = osc_d == 1 ?' ↗' : ' ↘'
+osc_text    = osc_d == 1 ? 'Bullish ' : 'Bearish' 
+osc_proyect = osc_d == 1 ? gemo2 + ' Long' : osc_d == -1 ? remo2 + ' Short' : nemo2 + ' Rank'
+osc_score   = osc_d == 1  ? 20 : osc_d == -1  ? -20 : 0
+
+// INFORMACION DEL ADX OSCILLATOR MTF
+osc_d2 = 0
+osc_d2  := oscUp2 ? 1 : oscDn2 ? -1 : nz(osc_d2[1])
+arrow_osc2   = osc_d2 == 1 ?' ↗' : ' ↘'
+osc_text2    = osc_d2 == 1 ? 'Bullish ' : 'Bearish' 
+osc_proyect2 = osc_d2 == 1 ? gemo2 + ' Long' : osc_d2 == -1 ? remo2 + ' Short' : nemo2 + ' Rank'
+osc_score2   = osc_d2 == 1  ? 20 : osc_d2 == -1  ? -20 : 0
+
+//TOTALIZADOR DE FUERZA DEL SAMRT PANEL
+score_final = ema_score + ema_score2  + rsi_score + osc_score2 + osc_score + osc_score2 + atr_score 
+
+porcentaje = math.max((score_final + 5) * 10, 0)
+ 
+total_score = 'Proyect ' + str.tostring(math.abs(porcentaje)) + ' %'
+col_score   = score_final == 0 ? color.new(#000000, 0) : score_final > 0 ? #008000 : #800000
+
+
+
+//+ str.tostring(percentage_from_total_dir(total_dir)) + " %"
+
+type SIZEpanel 
+    bool i = true
+    bool s = true
+    bool p = true
+
+showpanel = switch i_smart_style
+    'Smart'   => SIZEpanel.new(false, false, true)
+    'Medium'  => SIZEpanel.new(true , false, true)
+    'Complet' => SIZEpanel.new(true , true , true)    
+
+// TABLA DEL SMARTPANEL
+//----------------------------------------
+
+var table tablex    = table.new(
+     position       = api.position_f(i_tablepos_smart	), 
+     columns        =  5 , 
+     rows           = 11 , 
+     frame_color    = api.isDark() ? color.new(color.black, 50)  : color.new(color.white, 50),  
+     frame_width    = 1  , 
+     border_color   = api.isDark() ? color.new(color.black, 50)  : color.new(color.white, 50), 
+     border_width   = 1  , 
+     bgcolor        = na 
+     )
+
+if barstate.islast and i_showpanel
+    if i_tablepos_smart == 'Top Left'
+        table.cell(tablex, 1, 1, ' \n\n\n\n\n\n\n', text_color=color(na), bgcolor=color(na), text_halign=text.align_right, text_size=api.labelsize_f(i_labelsize_smart))
+    if showpanel.i
+        table.cell(tablex, 1, 3 , 'Indicator'               , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_1, api.isDark() ? 90 : 5 ), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 1, 4 , '1. ' + Typex + '\'s'     , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 1, 5 , '2. ' + Typex + '\'s' + ' MTF' , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 1, 6 , '3. RSI'                  , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 1, 7 , '4. RSI MTF'              , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 1, 8 , '5. OSC'                  , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 1, 9 , '6. OSC MTF'              , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 1, 10, '7. ATR'                  , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+    if showpanel.s
+        table.cell(tablex, 2, 3 , 'Status'                  , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_1, api.isDark() ? 90 : 5) , text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 2, 4 , ema_text                  , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 2, 5 , ema_text2                 , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 2, 6 , rsi_text                  , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 2, 7 , rsi_text2                 , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 2, 8 , osc_text                  , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 2, 9 , osc_text2                 , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 2, 10, atr_text                  , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+    if showpanel.p
+        table.cell(tablex, 3, 3 , 'Proyection '             , text_color=i_table_color_3   , bgcolor= col_score                                        , text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 3, 4 , ema_proyect               , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 3, 5 , ema_proyect2              , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 3, 6 , rsi_proyect               , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 3, 7 , rsi_proyect2              , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 3, 8 , osc_proyect               , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 3, 9 , osc_proyect2              , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+        table.cell(tablex, 3, 10, atr_proyect               , text_color=i_table_color_3   , bgcolor=color.new(i_table_color_2, api.isDark() ? 70 : 50), text_halign=text.align_left     , text_size=api.labelsize_f(i_labelsize_smart))
+
+// 🔺 }
+// 🔻 "==================== [FILTERS PANEL] ======================"  { 
+
+emoATR    = i_atrfilteri     ? "✅" : '❌'
+emoEMA    = i_emafilteri     ? "✅" : '❌'
+emoMTF    = i_emafilteri2    ? "✅" : '❌'
+emoRSI    = i_rsifilteri     ? "✅" : '❌'
+emoRSI2   = i_rsifilteri2    ? "✅" : '❌'
+
+if barstate.islast and i_filter_panel and (i_atrfilteri or i_emafilteri2 or i_emafilteri or i_rsifilteri or i_rsifilteri2)
+    var table tableFilter = table.new(
+     position = api.position_f(i_tablepos_filter), 
+     columns=10, 
+     rows=10, 
+     frame_color=color.black, 
+     frame_width=0,
+     border_width=1, 
+     bgcolor=na, 
+     border_color=color.new(color.black, 100))
+
+    table.cell(tableFilter, 0, 0, ''            , text_color=text_auto_Color,bgcolor=color.new(color.gray, 100), text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) , width = 4 )
+    table.cell(tableFilter, 1, 0, 'FILTERS'     , text_color=text_auto_Color,bgcolor=color.new(color.gray, 80) , text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) )
+    table.cell(tableFilter, 0, 1, ''            , text_color=text_auto_Color,bgcolor=color.new(color.gray, 100), text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) , width = 4)
+    table.cell(tableFilter, 1, 1, 'ON/OFF'      , text_color=text_auto_Color,bgcolor=color.new(color.gray, 80) , text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) )
+    if i_emafilteri
+        table.cell(tableFilter, 2, 0, 'EMA'     , text_color=text_auto_Color,bgcolor=color.new(color.gray, 80) , text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) , tooltip = "Filtro basado en una media movil")
+        table.cell(tableFilter, 2, 1, emoEMA    , text_color=text_auto_Color,bgcolor=color.new(color.gray, 80) , text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) , tooltip = "Filtro de Media Móvil de Bandas (55 períodos): Con este filtro  se evita la activación de las señales que no coinciden con la dirección indicada por la media móvil lenta de período de 55 de las bandas" )
+    if i_emafilteri2
+        table.cell(tableFilter, 3, 0, 'EMA MTF' , text_color=text_auto_Color,bgcolor=color.new(color.gray, 80) , text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) , tooltip = "Filtro basado en una media movil multitemporal")
+        table.cell(tableFilter, 3, 1, emoMTF    , text_color=text_auto_Color,bgcolor=color.new(color.gray, 80) , text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) , tooltip = "Filtro de Media Móvil Multitemporal: Con este filtro  se evita la activación de las señales que no están alineadas con la media móvil calculada de manera multitemporal, adaptada al marco de tiempo actual.")
+    if i_atrfilteri
+        table.cell(tableFilter, 4, 0, 'ATR'     , text_color=text_auto_Color,bgcolor=color.new(color.gray, 80) , text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) , tooltip = "Filtro basado en un ATR direccional") 
+        table.cell(tableFilter, 4, 1, emoATR    , text_color=text_auto_Color,bgcolor=color.new(color.gray, 80) , text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) , tooltip = 'Filtro de Tendencia (ATR Trailing Stop): Con este filtro  se evita la activación de las señales que vayan en contra de la tendencia definida por el ATR Trailing Stop.')
+    if i_rsifilteri
+        table.cell(tableFilter, 5, 0, 'RSI'     , text_color=text_auto_Color,bgcolor=color.new(color.gray, 80) , text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) , tooltip = "Filtro contra tendencia del Cloud del RSI. ")
+        table.cell(tableFilter, 5, 1, emoRSI    , text_color=text_auto_Color,bgcolor=color.new(color.gray, 80) , text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) , tooltip = "Filtro contra tendencia del Cloud del RSI (Activo). Con este filtro se evita la activación de las señales que van en contra de la tendencia definida por el Cloud del RSI, lo que ayuda a tomar decisiones de trading alineadas con la dirección predominante del mercado.")
+    if i_rsifilteri2
+        table.cell(tableFilter, 6, 0, 'RSI MTF' , text_color=text_auto_Color,bgcolor=color.new(color.gray, 80) , text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) , tooltip = "Filtro contra tendencia del Cloud del RSI MTF. ")
+        table.cell(tableFilter, 6, 1, emoRSI2   , text_color=text_auto_Color,bgcolor=color.new(color.gray, 80) , text_halign=text.align_center ,text_size=api.labelsize_f(i_labelsize_filter) , tooltip = "Filtro de RSI Multitemporal (Basado en RSI de Temporalidad Superior): Al activar este filtro, se utiliza el RSI de la temporalidad superior para filtrar las señales de sobrecompra y sobreventa que vayan en conta de la tendencia definida por el Cloud del RSI MTF")
+
+// 🔺 }
+// 🔻 "================= [MANEJADOR DE TRADES] ==================="  { 
+trademenu       = '- trade management -'
+onlystrong      = false  //input(false,"Only Strong Signals")
+stoprisk        = input.string('Medium', 'Risk Tolerance', options=['Low', 'Medium', 'High'], group=trademenu, inline="0", tooltip='Tolerancia de Stop Loss: Elige entre "Low" (Baja), "Medium" (Media) o "High" (Alta) para definir la distancia sugerida del stop loss en función del ATR. Ajusta según tu nivel de riesgo preferido.')
+fractalp        = 3  //input(3,"Fractal Period",step=1,minval=2)
+ratio1          = input.float(1.0, '(TP1) 1:', minval=0.5, step=0.5, group=trademenu, inline="1", tooltip = "Take Profit 1 (TP1): Define el nivel de toma de ganancia en función de una relación 1:1. Por defecto, se establece en 1, lo que significa que la primera toma de ganancia se calcula para obtener una ganancia igual al riesgo asumido en la operación.")
+ratio2          = input.float(2.0, '(TP2) 1:', minval=0.5, step=0.5, group=trademenu, inline="2", tooltip = "Take Profit 2 (TP2): Establece el nivel de toma de ganancia basado en una relación 1:2. Por defecto, se configura en 2, lo que significa que el segundo nivel de toma de ganancia se calcula para obtener el doble de la ganancia en comparación con el riesgo inicial.")
+ratio3          = input.float(3.0, '(TP3) 1:', minval=0.5, step=0.5, group=trademenu, inline="3", tooltip = "Take Profit 3 (TP3): Define el nivel de toma de ganancia en función de una relación 1:3. Por defecto, se establece en 3, lo que indica que el tercer nivel de toma de ganancia se calcula para obtener una ganancia tres veces mayor que el riesgo inicial.")
+labelsize_menu2 = input.string('Normal', 'Label Size', options=['Tiny', 'Small', 'Normal', 'Large', 'Huge'], group=trademenu, inline='4', tooltip = "Selector de Tamaño de Etiquetas: Este selector te permite ajustar el tamaño de las etiquetas que describen los niveles de stop, precio de entrada y los Take Profits (TP1, TP2 y TP3) en el manejador de trades. Personaliza el tamaño de las etiquetas para una visualización óptima de la información en tus operaciones.")
+
+linestyle_menu  = input.string('Solid', 'Line Style', options=['Solid', 'Dashed', 'Dotted'], group=trademenu, inline='5', tooltip = "Estilo de Línea: Elige entre 'Solid' (Sólido), 'Dashed' (Guión) o 'Dotted' (Punteado) para definir el estilo de las líneas que representan los niveles en el manejador de trades. Ajusta la apariencia según tus preferencias visuales.")
+tradetransp     = input.int(0, 'Transparency', minval=0, maxval=100, step=10, group=trademenu, inline='6', tooltip = "Transparencia: Ajusta el nivel de transparencia del manejador de trades en el gráfico según tus preferencias visuales.")
+
+Atr = ta.atr(7)
+
+low10  = ta.lowest(low, 20)
+high10 = ta.highest(high, 20)
+
+Multiplier1 = 1.5
+Multiplier2 = 2
+
+slatr   = ta.valuewhen(signalT, buyT ? close - math.max(Atr * Multiplier1, ta.tr * Multiplier1) : close + math.max(Atr * Multiplier1, ta.tr * Multiplier1), 0)
+slatr2  = ta.valuewhen(signalT, buyT ? close - math.max(Atr * Multiplier2, ta.tr * Multiplier2) : close + math.max(Atr * Multiplier2, ta.tr * Multiplier2), 0)
+sllh    = ta.valuewhen(signalT, buyT ? low10 : high10, 0)
+
+array_risk = array.new_float(3)
+array.set(array_risk, 0, slatr)
+array.set(array_risk, 1, slatr2)
+array.set(array_risk, 2, sllh)
+array.sort(array_risk, order.ascending)
+
+array0 = array.get(array_risk, 0)
+array1 = array.get(array_risk, 1)
+array2 = array.get(array_risk, 2)
+
+stopriskf = stoprisk == 'High' ? statesignal == 1 ? array0 : array2 : stoprisk == 'Medium' ? statesignal == 1 ? array1 : array1 : stoprisk == 'Low' ? statesignal == 1 ? array2 : array0 : na
+
+barindex = ta.valuewhen(signalT, bar_index, 0)
+entry    = ta.valuewhen(signalT, close, 0)
+
+sl = stopriskf
+tp1 = ratio1 * (entry - sl) + entry //ta.valuewhen(signalT, buyT ? ratio1 * (entry - sl) + entry : ratio1 * (entry - sl) + entry, 0)
+tp2 = ratio2 * (entry - sl) + entry //ta.valuewhen(signalT, buyT ? ratio2 * (entry - sl) + entry : ratio2 * (entry - sl) + entry, 0)
+tp3 = ratio3 * (entry - sl) + entry //ta.valuewhen(signalT, buyT ? ratio3 * (entry - sl) + entry : ratio3 * (entry - sl) + entry, 0)
+
+var label_l_entry = line(na)
+var label_l_sl    = line(na)
+var label_l_tp1   = line(na)
+var label_l_tp2   = line(na)
+var label_l_tp3   = line(na)
+
+var label_l_entry2 = label(na)
+var label_l_sl2  = label(na)
+var label_l_tp12 = label(na)
+var label_l_tp22 = label(na)
+var label_l_tp32 = label(na)
+
+
+trade_bullc = color.new(bull_color, tradetransp)
+trade_bearc = color.new(bear_color, tradetransp)
+trade_neuc = color.new(color.blue, tradetransp)
+
+if i_showtrade and not signalT and statesignal != 0
+    label_l_entry := line.new(barindex, entry, bar_index + 10, entry, color=trade_neuc, xloc=xloc.bar_index, style=api.f_linestyle(linestyle_menu))
+    line.delete(label_l_entry[1])
+    label_l_sl := line.new(barindex, sl, bar_index + 10, sl, color=trade_bearc, xloc=xloc.bar_index, style=api.f_linestyle(linestyle_menu))
+    line.delete(label_l_sl[1])
+    label_l_tp1 := line.new(barindex, tp1, bar_index + 10, tp1, color=trade_bullc, xloc=xloc.bar_index, style=api.f_linestyle(linestyle_menu))
+    line.delete(label_l_tp1[1])
+    label_l_tp2 := line.new(barindex, tp2, bar_index + 10, tp2, color=trade_bullc, xloc=xloc.bar_index, style=api.f_linestyle(linestyle_menu))
+    line.delete(label_l_tp2[1])
+    label_l_tp3 := line.new(barindex, tp3, bar_index + 10, tp3, color=trade_bullc, xloc=xloc.bar_index, style=api.f_linestyle(linestyle_menu))
+    line.delete(label_l_tp3[1])
+
+
+    label_l_entry2 := label.new(bar_index + 10, entry, color=color(na), xloc=xloc.bar_index, style=label.style_label_left, text='Entry ' + str.tostring(f_roundToTick(entry)), textcolor=color.new(trade_neuc, tradetransp), size=api.labelsize_f(labelsize_menu2))
+    label.delete(label_l_entry2[1])
+    label_l_sl2 := label.new(bar_index + 10, sl, color=color(na), xloc=xloc.bar_index, style=label.style_label_left, text='SL ' + str.tostring(f_roundToTick(sl)), textcolor=trade_bearc, size=api.labelsize_f(labelsize_menu2))
+    label.delete(label_l_sl2[1])
+    label_l_tp12 := label.new(bar_index + 10, tp1, color=color(na), xloc=xloc.bar_index, style=label.style_label_left, text='TP1 (1:' + str.tostring(ratio1) + ') ' + str.tostring(f_roundToTick(tp1)), textcolor=trade_bullc, size=api.labelsize_f(labelsize_menu2))
+    label.delete(label_l_tp12[1])
+    label_l_tp22 := label.new(bar_index + 10, tp2, color=color(na), xloc=xloc.bar_index, style=label.style_label_left, text='TP2 (1:' + str.tostring(ratio2) + ') ' + str.tostring(f_roundToTick(tp2)), textcolor=trade_bullc, size=api.labelsize_f(labelsize_menu2))
+    label.delete(label_l_tp22[1])
+    label_l_tp32 := label.new(bar_index + 10, tp3, color=color(na), xloc=xloc.bar_index, style=label.style_label_left, text='TP3 (1:' + str.tostring(ratio3) + ') ' + str.tostring(f_roundToTick(tp3)), textcolor=trade_bullc, size=api.labelsize_f(labelsize_menu2))
+    label.delete(label_l_tp32[1])
+
+
+plotchar(api.truncate(entry), 'Entry', '', location.top, color.new(color.blue, 100), editable=false)
+plotchar(api.truncate(sl)   , 'SL', '' , location.top, color.new(bear_color, 100), editable=false)
+plotchar(api.truncate(tp1)  , 'TP1', '', location.top, color.new(bull_color, 100), editable=false)
+plotchar(api.truncate(tp2)  , 'TP2', '', location.top, color.new(bull_color, 100), editable=false)
+plotchar(api.truncate(tp3)  , 'TP3', '', location.top, color.new(bull_color, 100), editable=false)
+
+
+// 🔺 }
+// 🔻 "==================== RSI DIVERGENCIAS  ===================="  {
+i_labelsize_menu    = input.string('Tiny', '', options=['Tiny', 'Small', 'Normal', 'Large', 'Huge'], inline='1', group = panelgroup, display= display.none, tooltip = "Panel Informativo del Indicador: Este panel proporciona un resumen completo del estado actual de todas las herramientas que componen el indicador. Indica claramente si las condiciones son alcistas o bajistas, lo que facilita una visión rápida y efectiva de la situación del mercado y ayuda en la toma de decisiones de trading.")
+
+div_group   = '-- Divergence --'
+
+osLevel     = i_osLevel // input.int(70, "Overbought", group=div_group, display=display.none, tooltip="Nivel que indica estado de sobrecompra en el oscilador.") 
+obLevel     = i_obLevel // input.int(30, "Oversold"  , group=div_group, display=display.none, tooltip="Nivel que señala estado de sobrevendido en el oscilador.")
+oscillator  = input.string("RSI", "Select Oscillator", options=["RSI","ADX OSC"],group=div_group,display=display.none,  tooltip = "Elige el oscillador que desea utilizar para calcular las divergencias")
+
+pivotType   = input.string("Oscillator", "Type of Pivot", options=["Oscillator", "Close"], group=div_group, display=display.none, tooltip="Selecciona si los pivotes se basan en el oscilador o en el cierre del precio.")
+regularmode = input.string("Standard"  , "Regular Divergence Mode", options=["Standard", "1 OB/OS", "2 OB/OS"], group=div_group, display=display.none, tooltip="Define el criterio para detectar divergencias: 'Standard' usa los puntos de pivote para calcular las diverencias, \n'1 OB/OS' requiere al menos un punto de pivote este dentro de las zonas de OB/OS.\n'2 OB/OS' necesita ambos puntos de pivote esten dentro en las zonas de OB/OS.")
+
+useClose    = input.bool(false, "Close Filter", group=div_group, display=display.none, tooltip="Si está activado, se verifica que el precio de cierre esté en concordancia con la dirección de la divergencia esperada para ser considerada válida.")
+pivotCalculationMode = input.string("Wicks", "Pivot Calculation Mode", options=["Body", "Wicks"], group=div_group, tooltip="Elige entre 'Body' (cuerpo de la vela) o 'Wicks' (mechas de la vela) para el cálculo de los puntos de pivote.")
+useBody = pivotCalculationMode == "Body" ? true : false
+
+lbL         = input.int(5, "Pivot Left", group=div_group, display=display.none, tooltip="Define cuántas velas a la izquierda se consideran para detectar un punto de pivote.")
+lbR         = input.int(3, "Pivot Right", group=div_group, display=display.none, tooltip="Establece cuántas velas a la derecha se consideran para detectar un punto de pivote.")
+
+rangeUpper  = input.int(60, "Max of Lookback Range", group=div_group, display=display.none, tooltip="Máximo de velas pasadas a considerar en la búsqueda de divergencias.")
+rangeLower  = 5// input.int(5, "Min of Lookback Range", group=div_group, display=display.none, tooltip="Mínimo de velas pasadas a considerar en la búsqueda de divergencias.")
+
+plotBull    = input.bool(true, "Div Bullish", group=div_group, inline = "2", display=display.none, tooltip="Activa para visualizar divergencias bajistas y Elige el color de las líneas.")
+bullColor   = input.color(color.green, "", group=div_group,inline = "2", display=display.none, tooltip="Activa para visualizar divergencias bajistas y Elige el color de las líneas.")
+
+plotBear    = input.bool(true, "Div Bearish", group=div_group, inline = "2", display=display.none, tooltip="Activa para visualizar divergencias bajistas y Elige el color de las líneas.")
+bearColor   = input.color(color.red, "", group=div_group, inline = "2", display=display.none, tooltip="Activa para visualizar las divergencias y Elige el color de las líneas.")
+
+float x = switch oscillator
+    "RSI" => rsi
+    "ADX OSC" => osc
+
+[bullCond, bearCond, regularbullish, regularbearish] = api.divergence_regular_f(x, obLevel, osLevel, lbL, lbR, pivotType, regularmode, useClose, useBody, plotBull, plotBear, rangeLower, rangeUpper )
+
+
+
+// 🔻 "================= PLOT DIVERGENCIAS ======================="  {
+plot(regularbullish and i_diversignal ? low[lbR] : na, offset=-lbR, title="Regular Bullish", linewidth=2, color=(bullCond      ? bullColor       : na) ,editable=false,display=display.pane)
+plot(regularbearish and i_diversignal ? high[lbR] : na, offset=-lbR, title="Regular Bearish", linewidth=2, color=(bearCond      ? bearColor       : na) ,editable=false,display=display.pane)
+
+if bullCond  and i_diversignal
+    label.new(bar_index[lbR], low[lbR], 'R', xloc=xloc.bar_index, yloc=yloc.price , color=color.new(color.white, 100)  , style=label.style_label_up  , textcolor=bullColor      , size=api.labelsize_f(i_labelsize_menu), textalign=text.align_left, tooltip='Regular Bullish') 
+if bearCond  and i_diversignal
+    label.new(bar_index[lbR], high[lbR], 'R', xloc=xloc.bar_index, yloc=yloc.price , color=color.new(color.white, 100)  , style=label.style_label_down, textcolor=bearColor      , size=api.labelsize_f(i_labelsize_menu), textalign=text.align_left, tooltip='Regular Bearish') 
+
+// 🔺 }
+
+// ⏫ [CLOSE]}
+// ⏫ [CLOSE]}
+// ⏬ [7] ==================  [ALERTAS]  ================== [OPEN] --{   
+
+// ALERTAS NORMALES
+//----------------------------------------
+
+string alert1x = indicator_name + '\n\n'
+string a_ticker_broker = '\n{{ticker}}'
+string a_trade = '\n\n' + 'Entry : {{plot("Entry")}}' + '\n' + 'SL          : {{plot("SL")}}' + '\n' + 'TP1   : {{plot("TP1")}}' + '\n' + 'TP2   : {{plot("TP2")}}' + '\n' + 'TP3   : {{plot("TP3")}}'
+string a_chart = '\n\nhttps://www.tradingview.com/chart?symbol={{exchange}}:{{ticker}}&interval={{interval}}'
+
+alertcondition(buyT, '1. Buy', alert1x + 'Buy' + a_ticker_broker + a_trade + a_chart)
+alertcondition(selT, '2. Sell', alert1x + 'Sell' + a_ticker_broker + a_trade + a_chart)
+alertcondition(buyT or selT, '3. Any Alert', alert1x + 'Alert' + a_ticker_broker + a_trade + a_chart)
+
+
+// ALERTA CUALQUIER LLAMADO A FUNCION
+//----------------------------------------
+tostring_round_vT(val) =>
+    val_e = str.tostring(api.truncate(val))
+    val_e
+
+
+alertcondition_vT(condition, text_alert, atclose, entry, stop, tp1, tp2, tp3) =>
+    string alert1 = indicator_name + '\n\n'  //indicador
+    string alert2 = '\n' + syminfo.prefix + ':' + syminfo.ticker  //ticker
+    string alert3 = '\n\n' + 'Entry : ' + tostring_round_vT(entry) + '\n' + 'SL          : ' + tostring_round_vT(stop) + '\n' + 'TP1   : ' + tostring_round_vT(tp1) + '\n' + 'TP2   : ' + tostring_round_vT(tp2) + '\n' + 'TP3   : ' + tostring_round_vT(tp3)
+    string alert4 = '\n\nChart:\nhttps://www.tradingview.com/chart?symbol=' + syminfo.prefix + ':' + syminfo.ticker + '&interval=' + timeframe.period  //Chart                
+
+    if condition
+        alert(alert1 + text_alert + alert2 + alert3 + alert4, atclose ? alert.freq_once_per_bar_close : alert.freq_once_per_bar)
+
+
+alertcondition_vT(i_masignal and ma_buy  , 'MA Buy', true, entry, sl, tp1, tp2, tp3)
+alertcondition_vT(i_masignal and ma_sel  , 'MA Sell', true, entry, sl, tp1, tp2, tp3)
+
+alertcondition_vT(i_atrsignal and atr_buy, 'ATR Buy', true, entry, sl, tp1, tp2, tp3)
+alertcondition_vT(i_atrsignal and atr_sel, 'ATR Sell', true, entry, sl, tp1, tp2, tp3)
+
+alertcondition_vT(i_rsisignal and rsi_buy, 'RSI Buy', true, entry, sl, tp1, tp2, tp3)
+alertcondition_vT(i_rsisignal and rsi_sel, 'RSI Sell', true, entry, sl, tp1, tp2, tp3)
+
+alertcondition_vT(i_cloudsignal and cloud_buy, 'Cloud RSI Buy', true, entry, sl, tp1, tp2, tp3)
+alertcondition_vT(i_cloudsignal and cloud_sel, 'Cloud RSI Sell', true, entry, sl, tp1, tp2, tp3)
+
+alertcondition_vT(i_crossignal and oversold_buy, 'Cross Oversold RSI Buy', true, entry, sl, tp1, tp2, tp3)
+alertcondition_vT(i_crossignal and overbought_sel, 'Cross Overbought RSI Sell', true, entry, sl, tp1, tp2, tp3)
+
+alertcondition_vT(i_signalosc or i_signalosc2 and osc_buy, 'OSC Buy', true, entry, sl, tp1, tp2, tp3)
+alertcondition_vT(i_signalosc or i_signalosc2 and osc_sel, 'OSC Sell', true, entry, sl, tp1, tp2, tp3)
+
+
+
+
+
+
+
+
+
+// ⏫ [CLOSE]}
